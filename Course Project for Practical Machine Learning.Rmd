@@ -1,0 +1,72 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+##1. Reading in the packages that will be used
+```{r}
+library(rattle)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(randomForest)
+library(RColorBrewer)
+library(readr)
+```
+
+##2. Reading in the training and test data
+```{r}
+setwd('~/Desktop/')
+trainRaw <- read.csv("trainFile.csv")
+testRaw <- read.csv("testFile.csv")
+
+```
+
+##3. Clean the data
+```{r}
+NZV <- nearZeroVar(trainRaw, saveMetrics = TRUE)
+head(NZV, 20)
+training01 <- trainRaw[, !NZV$nzv]
+testing01 <- testRaw[, !NZV$nzv]
+regex <- grepl("^X|timestamp|user_name", names(training01))
+training <- training01[, !regex]
+testing <- testing01[, !regex]
+cond <- (colSums(is.na(training)) == 0)
+training <- training[, cond]
+testing <- testing[, cond]
+```
+
+##4. Partition the train data set
+we split the cleaned training set into a pure training data set (70%) and a validation data set (30%)
+```{r}
+set.seed(56789) # For reproducibile purpose
+inTrain <- createDataPartition(training$classe, p = 0.70, list = FALSE)
+validation <- training[-inTrain, ]
+training <- training[inTrain, ]
+```
+
+##5. Data Modeling
+```{r}
+# Decision Tree
+modelTree <- rpart(classe ~ ., data = training, method = "class")
+prp(modelTree)
+predictTree <- predict(modelTree, validation, type = "class")
+confusionMatrix(validation$classe, predictTree)
+accuracy <- postResample(predictTree, validation$classe)
+ose <- 1 - as.numeric(confusionMatrix(validation$classe, predictTree)$overall[1])
+
+# Random Forest
+modelRF <- train(classe ~ ., data = training, method = "rf", trControl = trainControl(method = "cv", 5), ntree = 250)
+predictRF <- predict(modelRF, validation)
+
+accuracy <- postResample(predictRF, validation$classe)
+ose <- 1 - as.numeric(confusionMatrix(validation$classe, predictRF)$overall[1])
+
+# Apply the Random Forest model to Test data set
+predict(modelRF, testing[, -length(names(testing))])
+
+```
+
